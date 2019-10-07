@@ -4,6 +4,7 @@ import os
 import numpy as np
 import tensorflow as tf
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+tf.logging.set_verbosity(tf.logging.ERROR)
 from sklearn.metrics import roc_curve, auc
 from models import Detector, PGDAttackDetector
 

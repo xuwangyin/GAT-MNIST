@@ -4,7 +4,7 @@ import os
 import time
 import tensorflow as tf
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
+tf.logging.set_verbosity(tf.logging.ERROR)
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import train_test_split

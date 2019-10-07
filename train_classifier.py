@@ -2,6 +2,8 @@ import os
 import argparse
 import numpy as np
 import tensorflow as tf
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+tf.logging.set_verbosity(tf.logging.ERROR)
 
 from models import Classifier
 
