@@ -3,19 +3,6 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 
 
-# def MLP(x, hidden_layer_sizes, output_size, var_scope):
-#   with tf.variable_scope(var_scope, reuse=tf.AUTO_REUSE):
-#     for i, hidden_layer_size in enumerate(hidden_layer_sizes):
-#       x = tf.keras.layers.Dense(name='hidden_{}'.format(i), units=hidden_layer_size, activation=tf.nn.relu)(x)
-#     if output_size == 1:
-#       logits = tf.squeeze(tf.keras.layers.Dense(name='output', units=1)(x))
-#     else:
-#       logits = tf.keras.layers.Dense(name='output', units=output_size)(x)
-#     return logits
-
-def sigmoid(x):
-  return 1.0/(1.0 + np.exp(-x.astype(np.float64)))
-
 class MNISTMLP:
   def __init__(self, hidden_layer_sizes, output_size, var_scope):
     self.hidden_layer_sizes = hidden_layer_sizes
@@ -102,6 +89,7 @@ class Detector(object):
   def forward(self, x):
     return self.net.forward(x)
 
+
 class Classifier(object):
   def __init__(self, var_scope, mode=None, dataset='MNIST'):
     self.var_scope = var_scope
@@ -129,12 +117,81 @@ class Classifier(object):
     return self.net.forward(x)
 
 
+def sigmoid(x):
+  return 1.0/(1.0 + np.exp(-x.astype(np.float64)))
+
+
+class BayesClassifier(object):
+  def __init__(self, detectors):
+    self.y_input = tf.placeholder(tf.int64, shape=[None])
+    self.output_size = 10
+    self.detectors = detectors
+
+    self.input_size = 28 * 28 * 1
+    self.x_input = tf.placeholder(tf.float32, shape=[None, self.input_size])
+
+    self.logits = self.forward(self.x_input)
+
+    self.y_xent = tf.nn.sparse_softmax_cross_entropy_with_logits(
+      labels=self.y_input, logits=self.logits)
+
+    self.xent = tf.reduce_mean(self.y_xent)
+
+    self.predictions = tf.argmax(self.logits, 1)
+
+    correct_prediction = tf.equal(self.predictions, self.y_input)
+
+    self.num_correct = tf.reduce_sum(tf.cast(correct_prediction, tf.int64))
+    self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    self.ths = np.linspace(1e-6, 1, 1000)
+    self.logit_ths = np.linspace(-250.0, 50.0, 1000)
+
+  def forward(self, x):
+    # shape: [batch, num_classes]
+    return tf.stack([d.net.forward(x) for d in self.detectors], axis=1)
+
+  def nat_accs(self, x_nat, y, sess):
+    """Accuracies on natural dataset."""
+    nat_logits, nat_preds = sess.run([self.logits, self.predictions],
+            feed_dict={self.x_input: x_nat})
+    # p_x = np.mean(sigmoid(nat_logits), axis=1)
+    p_x = np.max(nat_logits, axis=1)
+    nat_accs = [np.logical_and(p_x > th, nat_preds == y).mean() for th in self.logit_ths]
+    return nat_accs
+
+  def nat_tpr(self, x_nat, sess):
+    """True positive rates on natural dataset."""
+    nat_logits, nat_preds = sess.run([self.logits, self.predictions],
+            feed_dict={self.x_input: x_nat})
+    # p_x = np.mean(sigmoid(nat_logits), axis=1)
+    print('nat logits min/max {}/{}'.format(nat_logits.min(), nat_logits.max()))
+    p_x = np.max(nat_logits, axis=1)
+    nat_tpr = [(p_x > th).mean() for th in self.logit_ths]
+    for th in self.logit_ths:
+      if (p_x > th).mean() < 0.95:
+        print('threshold at 0.95 tpr: {}'.format(th))
+        break
+    return nat_tpr
+
+  def adv_error(self, x_adv, y, sess):
+    """The error on perturbed dataset."""
+    adv_logits, adv_preds = sess.run([self.logits, self.predictions],
+            feed_dict={self.x_input: x_adv})
+    # p_x = np.mean(sigmoid(adv_logits), axis=1)
+    # print('adv logits min/max {}/{}'.format(adv_logits.min(), adv_logits.max()))
+    p_x = np.max(adv_logits, axis=1)
+    adv_error = [np.logical_and(p_x > th, adv_preds != y).mean() for th in self.logit_ths]
+    return adv_error
+
+  def adv_fpr(self, x_adv, y, sess):
+    """False positive rates on perturbed dataset."""
+    return self.adv_error(x_adv, y, sess)
+
+
 class PGDAttack:
+  """Base class for various attack methods"""
   def __init__(self, max_distance, num_steps, step_size, random_start,
                x_min, x_max, batch_size, norm, optimizer):
-    """Attack parameter initialization. The attack performs k steps of
-       size a, while always staying within epsilon from the initial
-       point."""
     self.max_distance = max_distance
     self.num_steps = num_steps
     self.step_size = step_size
@@ -167,15 +224,19 @@ class PGDAttack:
 
   def setup_optimizer(self):
     if self.optimizer == 'adam':
-      # Setup the adam optimizer and keep track of variables we're creating
+      # Setup the adam optimizer and keep track of created variables
       start_vars = set(x.name for x in tf.global_variables())
       optimizer = tf.train.AdamOptimizer(learning_rate=self.step_size, name='attack_adam')
+      # This term measures the perturbation size.
+      # It's supposed to be used when computing minimum perturbation adversarial examples.
+      # When performing norm-constrained attacks, self.c_constant should be set to 0.
       dist_term = tf.reduce_sum(self.c_constants*tf.reduce_sum(tf.square(self.delta), axis=1))
       self.train_step = optimizer.minimize(self.loss + dist_term, var_list=[self.delta])
       end_vars = tf.global_variables()
       new_vars = [x for x in end_vars if x.name not in start_vars]
       self.init = tf.variables_initializer(new_vars)
     elif self.optimizer == 'normgrad':
+      # Note the minimum pertubation objective is not implemented here
       if self.norm == 'Linf':
         self.train_step = self.delta.assign(self.delta + self.step_size * tf.sign(tf.gradients(-self.loss, self.delta)[0]))
       else:
@@ -198,15 +259,16 @@ class PGDAttack:
         delta_ = tf.clip_by_value(delta_, -self.max_distance, self.max_distance)
       self.calibrate_delta = self.delta.assign(delta_)
 
-  def perturb(self, x_nat, y, sess, c_constants=None, verbose=False, ax=None):
+  def perturb(self, x_nat, y, sess, c_constants=None, verbose=False):
     delta = np.zeros_like(x_nat)
-    if self.rand and not ax:
+    if self.rand:
       if self.norm == 'L2':
         delta = np.random.randn(*x_nat.shape)
         scale = np.random.uniform(low=0.0, high=self.max_distance, size=[delta.shape[0], 1])
         delta = scale * delta / np.linalg.norm(delta, axis=1, keepdims=True)
       else:
         delta = np.random.uniform(-self.max_distance, self.max_distance, x_nat.shape)
+      # # This clips (x_nat+delta) to (x_min, x_max), but in practise I found it not neccessary
       # delta = np.minimum(np.maximum(delta, self.x_min - x_nat), self.x_max - x_nat)
 
     if self.optimizer == 'adam':
@@ -222,42 +284,8 @@ class PGDAttack:
       sess.run([self.assign_delta, self.assign_x0, self.assign_y, self.assign_c_constants], feed_dict={
         self.delta_input: delta, self.x0_input: x_nat, self.y_input: y, self.c_constants_input: c_constants})
 
-    if verbose:
-      plt.figure(figsize=(10, 10))
-      print(self.norm, self.max_distance)
-    prev_dist = np.zeros(delta.shape[0])
     for i in range(self.num_steps):
-      if verbose:
-        delta, dist, logits, x = sess.run([self.delta, self.dist, self.detector_logits, self.x])
-        print('step {}'.format(i), end=': ')
-        #print('max {}'.format(np.round(np.max(x, axis=1), 4)[:5]), end=' | ')
-        #print('dist update {}'.format(np.round(np.absolute(dist - prev_dist), 4)[:5]), end=' | ')
-        print('dist {}'.format(np.round(dist, 4)[:5]), end=' | ')
-        print('logit {}'.format(np.round(logits, 3)[:5]))
-        prev_dist = dist
-        #  if i % 99 == 0:
-        #    #M = N = int(np.sqrt(x.shape[0]))
-        #    M = N = 10
-        #    dim = 28
-        #    pad = 1
-        #    space = dim + pad
-        #    tiling = np.ones((space * M, space * N), dtype=np.float32)
-        #    for m in range(M):
-        #      for n in range(N):
-        #        tiling[m*space: m*space+dim, n*space: n*space+dim] = x[m*M+n].reshape((28, 28))
-        #    plt.imshow(tiling, cmap='gray')
-        #    plt.axis('off')
-        #    plt.title('step {}'.format(i))
-        #    # plt.show()
-        #    plt.savefig('painting/img{:04d}.png'.format(i//1), bbox_inches='tight')
-        # # haven't saturated but already stopped increasing
-        #mask = np.logical_and(dist < self.max_distance - 0.1, np.absolute(dist - prev_dist) < 0.01)
-        #delta[mask] = delta[mask] + np.random.uniform(-0.02, 0.02, delta[mask].shape)
-        #sess.run(self.assign_delta, feed_dict={self.delta_input: delta})
       sess.run([self.train_step, self.calibrate_delta])
-      if ax:
-        x = sess.run(self.x)
-        ax.plot(x[0, 0], x[0, 1], 'rx')
 
     return sess.run(self.x)
 
@@ -267,45 +295,13 @@ class PGDAttack:
       adv.append(self.perturb(x[i: i+self.batch_size], y[i: i+self.batch_size], sess))
     return np.concatenate(adv)
 
-  def madry_perturb(self, x_nat, y, sess, verbose=False):
-    delta = np.zeros_like(x_nat)
-    if self.rand:
-      if self.norm == 'L2':
-        delta = np.random.randn(*x_nat.shape)
-        scale = np.random.uniform(low=0.0, high=self.max_distance, size=[delta.shape[0], 1])
-        delta = scale * delta / np.linalg.norm(delta, axis=1, keepdims=True)
-      else:
-        delta = np.random.uniform(-self.max_distance, self.max_distance, x_nat.shape)
-      # delta = np.minimum(np.maximum(delta, self.x_min - x_nat), self.x_max - x_nat)
-
-    if self.optimizer == 'adam':
-      sess.run(self.init)
-    sess.run([self.assign_x0, self.assign_delta, self.assign_y], feed_dict={self.y_input: y, self.x0_input: x_nat, self.delta_input: delta})
-
-    for i in range(self.num_steps):
-      grad = sess.run(self.classifier_grad)
-
-      if self.norm == 'L2':
-        delta += self.step_size * grad / np.linalg.norm(grad, axis=1)
-        delta = np.minimum(np.maximum(delta, self.x_min - x_nat), self.x_max - x_nat)
-        delta_norm = np.linalg.norm(delta, axis=1, keepdims=True)
-        delta = delta * self.max_distance / np.clip(delta_norm, a_min=self.max_distance, a_max=None)
-      else:
-        delta += self.step_size * np.sign(grad)
-        delta = np.minimum(np.maximum(delta, self.x_min - x_nat), self.x_max - x_nat)
-        delta = np.clip(delta, -self.max_distance, self.max_distance)
-
-      sess.run(self.assign_delta, feed_dict={self.delta_input: delta})
-
-    return sess.run([self.x, self.dist, self.classifier_logits])
-
 
 class PGDAttackDetector(PGDAttack):
   def __init__(self, detector, **kwargs):
     super().__init__(**kwargs)
-    self.detector_logits = detector.net.forward(self.x)
-    # self.detector_logits = detector.forward(self.x)
+    self.detector_logits = detector.forward(self.x)
     if kwargs['optimizer'] == 'normgrad':
+      # normgrad optimizes cross-entropy loss (optimize logit outputs makes no difference)
       labels = tf.zeros_like(self.detector_logits)
       self.loss = -tf.reduce_sum(
         tf.nn.sigmoid_cross_entropy_with_logits(labels=labels, logits=self.detector_logits))
@@ -329,6 +325,7 @@ class PGDAttackClassifier(PGDAttack):
       correct_logit = tf.reduce_sum(label_mask * logits, axis=1)
       wrong_logit = tf.reduce_max((1 - label_mask) * logits - 1e4 * label_mask, axis=1)
       if isinstance(classifier, BayesClassifier):
+        assert not targeted
         self.loss = tf.reduce_sum(-wrong_logit)
       else:
         self.loss = tf.reduce_sum(correct_logit - wrong_logit)
@@ -340,6 +337,7 @@ class PGDAttackClassifier(PGDAttack):
 class PGDAttackCombined(PGDAttack):
   def __init__(self, classifier, bayes_classifier, loss_fn, **kwargs):
     super().__init__(**kwargs)
+    assert isinstance(classifier, Classifier)
     assert isinstance(bayes_classifier, BayesClassifier)
     clf_logits = classifier.forward(self.x)
     det_logits = bayes_classifier.forward(self.x)
@@ -360,129 +358,30 @@ class PGDAttackCombined(PGDAttack):
     self.setup_optimizer()
 
 
-class PGDAttackBayesianOVR(PGDAttack):
-  def __init__(self, classifier, loss_fn, **kwargs):
-    super().__init__(**kwargs)
-    if loss_fn == 'xent':
-      # self.loss = -tf.reduce_sum(classifier.y_xent)
-      logits = classifier.forward(self.x)
-      y_xent = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=logits)
-      self.loss = -tf.reduce_sum(y_xent)
-      #self.loss = -y_xent
-    elif loss_fn == 'cw':
-      # logits = classifier.net.forward(self.x)
-      logits = classifier.forward(self.x)
-      label_mask = tf.one_hot(self.y, classifier.output_size, dtype=tf.float32)
-      correct_logit = tf.reduce_sum(label_mask * logits, axis=1)
-      wrong_logit = tf.reduce_max((1 - label_mask) * logits - 1e4 * label_mask, axis=1)
-      #self.loss = tf.reduce_sum(correct_logit - wrong_logit)
-      self.loss = tf.reduce_sum(- wrong_logit)
-    self.setup_optimizer()
 
+# The followings are adapted or copied from https://github.com/MadryLab/mnist_challenge
 
-class PGDAttackAda(PGDAttack):
-  def __init__(self, target, classifier, detector, method, **kwargs):
-    super().__init__(**kwargs)
-    clf_logits = classifier.net.forward(self.x)
-    det_logits = detector.net.forward(self.x)
-
-    targets = tf.fill(tf.shape(self.x)[0:1], target)
-    target_mask = tf.one_hot(targets, 10, dtype=tf.float32)
-    correct_logit = tf.reduce_max(clf_logits - 1e4 * target_mask, axis=1)
-    wrong_logit = clf_logits[:, target]
-
-    if method == 'cw':
-      with_det_logits = (-det_logits + 1) * tf.reduce_max(clf_logits, axis=1)
-      correct_logit_with_det = tf.maximum(correct_logit, with_det_logits)
-      self.loss = tf.reduce_sum(correct_logit_with_det - wrong_logit)
-    else:
-      mask = tf.cast(tf.greater(wrong_logit, correct_logit), tf.float32)
-      self.loss = tf.reduce_sum(mask * (-det_logits) + (1.0 - mask) * (correct_logit - wrong_logit))
-
-    self.setup_optimizer()
-
-
-
-
-'''
-class PGDAttackBayesianOVR(PGDAttack):
-  def __init__(self, detectors, thresholds=np.zeros(10), **kwargs):
-    super().__init__(**kwargs)
-    ovr_logits = [d.net.forward(self.x) - t for d, t in zip(detectors, thresholds)]
-    ovr_logits = tf.stack(ovr_logits, axis=1)
-    det_logits = -tf.reduce_max(ovr_logits, axis=1, keepdims=True)
-    with_det_logits = tf.concat([ovr_logits, det_logits], axis=1)
-    self.predictions = tf.argmax(with_det_logits, 1)
-
-    label_mask = tf.one_hot(self.y, 10, dtype=tf.float32)
-    wrong_logit = tf.reduce_max((1 - label_mask) * ovr_logits - 1e4 * label_mask, axis=1)
-
-    self.loss = tf.reduce_sum(-wrong_logit)
-
-    self.setup_optimizer()
-'''
-
-class BayesClassifier(object):
-  def __init__(self, detectors):
-    self.y_input = tf.placeholder(tf.int64, shape=[None])
-    self.output_size = 10
-    self.detectors = detectors
-
-    self.input_size = 28 * 28 * 1
-    self.x_input = tf.placeholder(tf.float32, shape=[None, self.input_size])
-
-    self.logits = self.forward(self.x_input)
-
-    self.y_xent = tf.nn.sparse_softmax_cross_entropy_with_logits(
-      labels=self.y_input, logits=self.logits)
-
-    self.xent = tf.reduce_mean(self.y_xent)
-
-    self.predictions = tf.argmax(self.logits, 1)
-
-    correct_prediction = tf.equal(self.predictions, self.y_input)
-
-    self.num_correct = tf.reduce_sum(tf.cast(correct_prediction, tf.int64))
-    self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    self.ths = np.linspace(1e-6, 1, 1000)
-    self.logit_ths = np.linspace(-250.0, 50.0, 1000)
-
-  def forward(self, x):
-    # shape: [batch, num_classes]
-    return tf.stack([d.net.forward(x) for d in self.detectors], axis=1)
-
-  def nat_accs(self, x_nat, y, sess):
-    nat_logits, nat_preds = sess.run([self.logits, self.predictions],
-            feed_dict={self.x_input: x_nat})
-    # p_x = np.mean(sigmoid(nat_logits), axis=1)
-    p_x = np.max(nat_logits, axis=1)
-    nat_accs = [np.logical_and(p_x > th, nat_preds == y).mean() for th in self.logit_ths]
-    return nat_accs
-
-  def nat_tpr(self, x_nat, sess):
-    nat_logits, nat_preds = sess.run([self.logits, self.predictions],
-            feed_dict={self.x_input: x_nat})
-    # p_x = np.mean(sigmoid(nat_logits), axis=1)
-    print('nat logits min/max {}/{}'.format(nat_logits.min(), nat_logits.max()))
-    p_x = np.max(nat_logits, axis=1)
-    nat_tpr = [(p_x > th).mean() for th in self.logit_ths]
-    for th in self.logit_ths:
-      if (p_x > th).mean() < 0.95:
-        print('threshold at 0.95 tpr: {}'.format(th))
-        break
-    return nat_tpr
-
-  def adv_error(self, x_adv, y, sess):
-    adv_logits, adv_preds = sess.run([self.logits, self.predictions],
-            feed_dict={self.x_input: x_adv})
-    # p_x = np.mean(sigmoid(adv_logits), axis=1)
-    print('adv logits min/max {}/{}'.format(adv_logits.min(), adv_logits.max()))
-    p_x = np.max(adv_logits, axis=1)
-    adv_error = [np.logical_and(p_x > th, adv_preds != y).mean() for th in self.logit_ths]
-    return adv_error
-
-  def adv_fpr(self, x_adv, y, sess):
-    return self.adv_error(x_adv, y, sess)
+# MIT License
+# 
+# Copyright (c) 2017 Aleksander Madry, Aleksandar Makelov, Ludwig Schmidt, Dimitris Tsipras, and Adrian Vladu
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
 class MadryLinfPGDAttackDetector:
   def __init__(self, detector, epsilon, num_steps, step_size, random_start, x_min, x_max):
