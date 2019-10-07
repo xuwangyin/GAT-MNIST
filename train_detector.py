@@ -14,8 +14,8 @@ from utils import *
 import pathlib
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--target_class', type=int, required=True)
-parser.add_argument('--epsilon', metavar='max-distance', type=float, required=True)
+parser.add_argument('--target_class', metavar='class of base detector; start from 0', type=int, required=True)
+parser.add_argument('--epsilon', metavar='max-distance', type=float, default='0.3')
 parser.add_argument('--norm', choices=['L2', 'Linf'], default='Linf')
 parser.add_argument('--train_optimizer', choices=['adam', 'normgrad'], default='adam')
 parser.add_argument('--test_optimizer', choices=['adam', 'normgrad'], default='adam')
@@ -82,8 +82,6 @@ test_attack = PGDAttackDetector(detector, max_distance=args.epsilon,
                                 batch_size=x_val_others.shape[0], norm=args.norm,
                                 optimizer=args.test_optimizer)
 
-# config = tf.ConfigProto(device_count = {'GPU': 0})
-config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.2))
 with tf.Session() as sess:
   sess.run(tf.global_variables_initializer())
 
@@ -142,6 +140,6 @@ with tf.Session() as sess:
                                                                np.sum(np.bitwise_and(y_pred_test, y_test_with_adv)),
                                                                np.sum(y_test_with_adv), np.sum(1 - y_test_with_adv)))
 
-    savedir = 'checkpoints/mnist/detector_{}_{}/ovr-steps{}-{}-noclip-balanced-run2/'.format(args.norm, args.epsilon, args.train_steps, args.train_optimizer)
+    savedir = 'checkpoints/mnist/detector_{}_{}/ovr-steps{}-{}-noclip-balanced/'.format(args.norm, args.epsilon, args.train_steps, args.train_optimizer)
     pathlib.Path(savedir).mkdir(parents=True, exist_ok=True)
     detector_saver.save(sess, os.path.join(savedir, model_name), global_step=epoch)
