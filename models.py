@@ -274,7 +274,7 @@ class PGDAttack:
     if self.optimizer == 'adam':
       sess.run(self.init)
 
-    if c_constants == None:
+    if c_constants is None:
       c_constants = np.zeros(x_nat.shape[0])
 
     if y is None:
