@@ -56,16 +56,16 @@ with tf.Session() as sess:
 
   # Evaluate generative classifier
   attack = PGDAttackClassifier(classifier=bayes_classifier, loss_fn='cw', **attack_config)
-  # x_test_adv_bayes = attack.batched_perturb(x_test, y_test, sess)
-  x_test_adv_bayes = np.load(os.path.join(datadir, 'x_test_adv_detector.npy'))
+  x_test_adv_bayes = attack.batched_perturb(x_test, y_test, sess)
+  # x_test_adv_bayes = np.load(os.path.join(datadir, 'x_test_adv_detector.npy'))
   bayes_nat_accs = bayes_classifier.nat_accs(x_test, y_test, sess)
   bayes_adv_errors = bayes_classifier.adv_error(x_test_adv_bayes, y_test, sess)
   plt.plot(bayes_adv_errors, bayes_nat_accs, label='Generative classifier')
 
   # Evaluate generative classifier - use cross-entropy loss
   attack = PGDAttackClassifier(classifier=bayes_classifier, loss_fn='xent', **attack_config)
-  # x_test_adv_bayes = attack.batched_perturb(x_test, y_test, sess)
-  x_test_adv_bayes = np.load(os.path.join(datadir, 'x_test_adv_detector_xent.npy'))
+  x_test_adv_bayes = attack.batched_perturb(x_test, y_test, sess)
+  # x_test_adv_bayes = np.load(os.path.join(datadir, 'x_test_adv_detector_xent.npy'))
   bayes_nat_accs = bayes_classifier.nat_accs(x_test, y_test, sess)
   bayes_adv_errors = bayes_classifier.adv_error(x_test_adv_bayes, y_test, sess)
   plt.plot(bayes_adv_errors, bayes_nat_accs, label='Generative classifier (xent loss)')

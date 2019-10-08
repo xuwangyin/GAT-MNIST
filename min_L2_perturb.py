@@ -1,11 +1,12 @@
 import sys
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import tensorflow as tf
-tf.logging.set_verbosity(tf.logging.ERROR)
 from models import BayesClassifier, PGDAttackClassifier
 from eval_utils import BaseDetectorFactory, load_mnist_data
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+tf.logging.set_verbosity(tf.logging.ERROR)
 
 def update_bound(lower, upper, current, success):
   if success:

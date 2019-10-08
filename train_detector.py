@@ -1,17 +1,18 @@
 import sys
 import argparse
 import os
+import pathlib
 import time
+import numpy as np
 import tensorflow as tf
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-tf.logging.set_verbosity(tf.logging.ERROR)
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import train_test_split
-
 from models import Detector, PGDAttackDetector
-from utils import *
-import pathlib
+from eval_utils import load_mnist_data
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+tf.logging.set_verbosity(tf.logging.ERROR)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--target_class', metavar='class of base detector; start from 0', type=int, required=True)
@@ -38,14 +39,8 @@ if args.norm == 'Linf':
   # assert args.step_size == 0.01
 
 
-# args.epsilon = {'L2': 1.5, 'Linf': 0.5}[args.norm]
 
-mnist = tf.keras.datasets.mnist
-
-(x_train, y_train),(x_test, y_test) = mnist.load_data()
-x_train, x_test = x_train / 255.0, x_test / 255.0
-x_train = np.reshape(x_train, [x_train.shape[0], -1])
-x_test = np.reshape(x_test, [x_test.shape[0], -1])
+(x_train, y_train),(x_test, y_test) = load_mnist_data()
 
 # use 20% training data to do validation
 x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=1/6., random_state=123)

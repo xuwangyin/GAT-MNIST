@@ -3,10 +3,12 @@ import sys
 import os
 import numpy as np
 import tensorflow as tf
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-tf.logging.set_verbosity(tf.logging.ERROR)
 from sklearn.metrics import roc_curve, auc
 from models import Detector, PGDAttackDetector
+from eval_utils import load_mnist_data
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+tf.logging.set_verbosity(tf.logging.ERROR)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--target_class', type=int, required=True)
@@ -22,15 +24,7 @@ print(args)
 
 np.random.seed(123)
 
-
-mnist = tf.keras.datasets.mnist
-
-(x_train, y_train), (x_test, y_test) = mnist.load_data()
-x_train, x_test = x_train / 255.0, x_test / 255.0
-x_train = np.reshape(x_train, [x_train.shape[0], -1])
-x_test = np.reshape(x_test, [x_test.shape[0], -1])
-
-x_min, x_max = 0.0, 1.0
+(x_train, y_train), (x_test, y_test) = load_mnist_data()
 
 scope = 'detector-class{}'.format(args.target_class)
 detector = Detector(var_scope=scope, dataset='MNIST')
@@ -44,7 +38,7 @@ y_test_others = y_test[y_test != args.target_class]
 attack = PGDAttackDetector(detector=detector,
                            max_distance=args.epsilon,
                            num_steps=args.steps, step_size=args.step_size,
-                           random_start=False, x_min=x_min, x_max=x_max,
+                           random_start=False, x_min=0.0, x_max=1.0,
                            batch_size=x_test_others.shape[0],
                            norm=args.norm, optimizer=args.optimizer)
 
