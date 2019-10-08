@@ -56,7 +56,7 @@ with tf.Session() as sess:
         PGDAttackClassifier(classifier=classifier,
                             loss_fn='cw',
                             **attack_config), sess)
-    plt.plot(fpr, tpr, label='Integrated detection (classifier attack)', linewidth=2)
+    plt.plot(fpr, tpr, label='Integrated detection (classifier attack)')
 
     fpr = compute_fpr(
         PGDAttackClassifier(classifier=bayes_classifier,
