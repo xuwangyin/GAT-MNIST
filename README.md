@@ -26,6 +26,8 @@ roc_auc: 0.9995914973528214
 
 **Robust classification performance.** Use eval_generative_classifier.py and eval_integrated_classifier.py to test the classification performances of generative classification and integrated classification.
 
+**Minimum mean L2 distance.** Use min_L2_perturb.py to reproduce the minimum mean L2 distance results.
+
 
 ## Model checkpoints
 
