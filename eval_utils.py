@@ -46,7 +46,7 @@ def get_adv_errors(x_adv, y, logit_ths, classifier, base_detectors, sess):
 def get_fpr(x_adv, y, logit_ths, classifier, base_detectors, sess):
   """The portion of perturbed data samples that are adversarial (adv_preds != y) and
   at the same time successfully fool the base detectors (det_logits > th)"""
-  return get_adv_errors()
+  return get_adv_errors(x_adv, y, logit_ths, classifier, base_detectors, sess)
 
 
 def get_nat_accs(x_nat, y, logit_ths, classifier, base_detectors, sess):
