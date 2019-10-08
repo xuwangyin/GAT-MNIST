@@ -1,4 +1,3 @@
-import argparse
 import sys
 import os
 import numpy as np
@@ -10,16 +9,6 @@ import matplotlib.pyplot as plt
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.logging.set_verbosity(tf.logging.ERROR)
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--epsilon', metavar='max-distance', default=0.3, type=float)
-parser.add_argument('--norm', choices=['L2', 'Linf'], default='Linf')
-parser.add_argument('--optimizer', choices=['adam', 'normgrad'], default='adam')
-parser.add_argument('--steps', type=int, default=100)
-parser.add_argument('--step_size', type=float, default=0.01)
-
-
-args = parser.parse_args()
-
 np.random.seed(123)
 
 (x_train, y_train), (x_test, y_test) = load_mnist_data()
@@ -27,13 +16,13 @@ np.random.seed(123)
 classifier = MadryClassifier(var_scope='classifier')
 classifier_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='classifier')
 classifier_saver = tf.train.Saver(var_list=classifier_vars, max_to_keep=1)
-factory = BaseDetectorFactory(args.epsilon)
+factory = BaseDetectorFactory(eps=0.3)
 
-attack_config = {'max_distance': args.epsilon, 'num_steps': args.steps, 'step_size': args.step_size, 'random_start': False,
-        'x_min': 0, 'x_max': 1.0, 'batch_size': x_test.shape[0]//2, 'optimizer': args.optimizer, 'norm': args.norm}
+attack_config = {'max_distance': 0.3, 'num_steps': 100, 'step_size': 0.01, 'random_start': False,
+        'x_min': 0, 'x_max': 1.0, 'batch_size': x_test.shape[0]//2, 'optimizer': 'adam', 'norm': 'Linf'}
 print('attack config: {}'.format(attack_config))
 
-datadir = 'performance_data/eps{}'.format(args.epsilon)
+datadir = 'performance_data/eps0.3'
 
 with tf.Session() as sess:
   # Restore variables
