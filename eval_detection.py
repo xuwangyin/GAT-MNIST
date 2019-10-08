@@ -10,7 +10,6 @@ from eval_utils import get_tpr, get_fpr
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.logging.set_verbosity(tf.logging.ERROR)
 
-
 np.random.seed(123)
 
 (x_train, y_train), (x_test, y_test) = load_mnist_data()
@@ -47,7 +46,8 @@ with tf.Session() as sess:
 
     def compute_fpr(attack, sess):
         x_test_adv = attack.batched_perturb(x_test, y_test, sess)
-        return get_fpr(x_test_adv, y_test, logit_ths, classifier, base_detectors, sess)
+        return get_fpr(x_test_adv, y_test, logit_ths, classifier,
+                       base_detectors, sess)
 
     # Integrated detection
     tpr = get_tpr(x_test, logit_ths, classifier, base_detectors, sess)
@@ -68,7 +68,9 @@ with tf.Session() as sess:
         PGDAttackClassifier(classifier=bayes_classifier,
                             loss_fn='xent',
                             **attack_config), sess)
-    plt.plot(fpr, tpr, label='Integrated detection (detector attack xent loss)')
+    plt.plot(fpr,
+             tpr,
+             label='Integrated detection (detector attack xent loss)')
 
     fpr = compute_fpr(
         PGDAttackCombined(classifier=classifier,
@@ -77,13 +79,15 @@ with tf.Session() as sess:
                           **attack_config), sess)
     plt.plot(fpr, tpr, label='Integrated detection (combined attack cw loss)')
 
-
     fpr = compute_fpr(
         PGDAttackCombined(classifier=classifier,
                           bayes_classifier=bayes_classifier,
                           loss_fn='default',
                           **attack_config), sess)
-    plt.plot(fpr, tpr, label='Integrated detection (combined attack)', linewidth=2)
+    plt.plot(fpr,
+             tpr,
+             label='Integrated detection (combined attack)',
+             linewidth=2)
 
     # Generative detection
     bayes_tpr = bayes_classifier.nat_tpr(x_test, sess)
