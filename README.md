@@ -10,7 +10,9 @@
     ```
 - Evaluate base detectors (robustness test). As an example, the following tests the first eps0.3 base detector.
     ```
-    $ python eval_base_detector.py --target_class 0 --epsilon 0.3 --steps 200 --step_size 0.01 --optimizer adam -p checkpoints/mnist/detector_Linf_0.3/ovr-steps100-adam-noclip-balanced/ovr_class0_Linf_distance0.3-91
+    $ python eval_base_detector.py --target_class 0 --epsilon 0.3 --steps 200 --step_size 0.01 \
+    --optimizer adam \
+    -p checkpoints/mnist/detector_Linf_0.3/ovr-steps100-adam-noclip-balanced/ovr_class0_Linf_distance0.3-91
     roc_auc: 0.9995914973528214
     ```
 
