@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 from models import Detector
 
+
 def load_mnist_data():
   mnist = tf.keras.datasets.mnist
   
@@ -11,6 +12,59 @@ def load_mnist_data():
   x_train = np.reshape(x_train, [x_train.shape[0], -1])
   x_test = np.reshape(x_test, [x_test.shape[0], -1])
   return (x_train, y_train), (x_test, y_test)
+
+
+def get_det_logits(x, x_preds, base_detectors, sess):
+    """Compute detector logits for the input.
+
+    First assign x to base detectors based on the classifier output (x_preds), 
+    then computes detector logit outputs.  
+    """
+    det_logits = np.zeros_like(x_preds)
+    for classidx in range(10):
+      assign = x_preds == classidx
+      feed_dict = {base_detectors[classidx].x_input: x[assign]}
+      det_logits[assign] = sess.run(base_detectors[classidx].logits, feed_dict=feed_dict)
+    return det_logits
+
+
+def get_adv_errors(x_adv, y, logit_ths, classifier, base_detectors, sess):
+  """With reject option, the naive classifier's error rate on perturbed test set.
+
+  The error rate is computed as the portion of samples that are
+  not rejected (det_logits > th) and at the same time
+  causing misclassification (adv_preds != y)
+  In other words, any samples that are rejected or
+  corrected classified, are assumed to be properly handled.
+  """
+  adv_preds = sess.run(classifier.predictions, feed_dict={classifier.x_input: x_adv})
+  det_logits = get_det_logits(x_adv, adv_preds, base_detectors, sess)
+  errors = [np.logical_and(det_logits > th, adv_preds != y).mean() for th in logit_ths]
+  return errors
+
+
+def get_fpr(x_adv, y, logit_ths, classifier, base_detectors, sess):
+  """The portion of perturbed data samples that are adversarial (adv_preds != y) and
+  at the same time successfully fool the base detectors (det_logits > th)"""
+  return get_adv_errors()
+
+
+def get_nat_accs(x_nat, y, logit_ths, classifier, base_detectors, sess):
+  """Accuracy on the natural data set"""
+  nat_preds = sess.run(classifier.predictions, feed_dict={classifier.x_input: x_nat})
+  det_logits = get_det_logits(x_nat, nat_preds, base_detectors, sess)
+  accs = [(np.logical_and(det_logits > th, nat_preds == y)).mean() for th in logit_ths] 
+  return accs
+
+
+def get_tpr(x_nat, logit_ths, classifier, base_detectors, sess):
+  """Recall on the set of original data set"""
+  nat_preds = sess.run(classifier.predictions, feed_dict={classifier.x_input: x_nat})
+  det_logits = get_det_logits(x_nat, nat_preds, base_detectors, sess)
+  # print('nat logits min/max {}/{}'.format(det_logits.min(), det_logits.max()))
+  tpr = [(det_logits > th).mean() for th in logit_ths]
+  return tpr
+
 
 
 def get_detector_ckpt(eps):
