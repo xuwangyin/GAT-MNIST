@@ -34,7 +34,7 @@ with tf.Session() as sess:
 
   bayes_classifier = BayesClassifier(base_detectors)
 
-  for loss_fn in ['yoyo', 'cw']:
+  for loss_fn in ['default', 'cw']:
     logit_ths = np.linspace(-250., 50.0, 1000)
     attack = PGDAttackCombined(classifier=classifier, bayes_classifier=bayes_classifier, loss_fn=loss_fn, **attack_config)
     x_test_adv = attack.batched_perturb(x_test, y_test, sess)
