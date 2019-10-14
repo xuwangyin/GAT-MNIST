@@ -13,6 +13,9 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 np.random.seed(123)
 
 (x_train, y_train), (x_test, y_test) = load_mnist_data()
+if len(sys.argv) > 1:
+    num_eval_samples = int(sys.argv[1])
+    x_test, y_test = x_test[:num_eval_samples], y_test[:num_eval_samples]
 
 classifier = Classifier(var_scope='classifier', dataset='MNIST')
 classifier_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
@@ -68,9 +71,7 @@ with tf.Session() as sess:
         PGDAttackClassifier(classifier=bayes_classifier,
                             loss_fn='xent',
                             **attack_config), sess)
-    plt.plot(fpr,
-             tpr,
-             label='Integrated detection (detector attack xent loss)')
+    plt.plot(fpr, tpr, label='Integrated detection (detector attack xent loss)')
 
     fpr = compute_fpr(
         PGDAttackCombined(classifier=classifier,
@@ -84,19 +85,24 @@ with tf.Session() as sess:
                           bayes_classifier=bayes_classifier,
                           loss_fn='default',
                           **attack_config), sess)
-    plt.plot(fpr,
-             tpr,
-             label='Integrated detection (combined attack)',
-             linewidth=2)
+    plt.plot(fpr, tpr, label='Integrated detection (combined attack)')
 
     # Generative detection
-    bayes_tpr = bayes_classifier.nat_tpr(x_test, sess)
+    tpr = bayes_classifier.nat_tpr(x_test, sess)
     attack = PGDAttackClassifier(classifier=bayes_classifier,
                                  loss_fn='cw',
                                  **attack_config)
     x_test_adv = attack.batched_perturb(x_test, y_test, sess)
-    bayes_fpr = bayes_classifier.adv_fpr(x_test_adv, y_test, sess)
-    plt.plot(bayes_fpr, bayes_tpr, label='Generative detection', linewidth=2)
+    fpr = bayes_classifier.adv_fpr(x_test_adv, y_test, sess)
+    plt.plot(fpr, tpr, label='Generative detection')
+
+    # Generative detection (cross-entropy loss)
+    attack = PGDAttackClassifier(classifier=bayes_classifier,
+                                 loss_fn='xent',
+                                 **attack_config)
+    x_test_adv = attack.batched_perturb(x_test, y_test, sess)
+    fpr = bayes_classifier.adv_fpr(x_test_adv, y_test, sess)
+    plt.plot(fpr, tpr, label='Generative detection (xent loss)')
 
     plt.ylim([0.9, 1.0])
     plt.xlim([0.0, 0.5])
