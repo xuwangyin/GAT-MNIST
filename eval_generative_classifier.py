@@ -32,8 +32,6 @@ attack_config = {
 }
 print('attack config: {}'.format(attack_config))
 
-datadir = 'performance_data/eps0.3'
-
 with tf.Session() as sess:
     # Restore variables
     classifier_saver.restore(
@@ -68,7 +66,6 @@ with tf.Session() as sess:
                                  loss_fn='cw',
                                  **attack_config)
     x_test_adv_bayes = attack.batched_perturb(x_test, y_test, sess)
-    # x_test_adv_bayes = np.load(os.path.join(datadir, 'x_test_adv_detector.npy'))
     bayes_nat_accs = bayes_classifier.nat_accs(x_test, y_test, sess)
     bayes_adv_errors = bayes_classifier.adv_error(x_test_adv_bayes, y_test,
                                                   sess)
@@ -79,7 +76,6 @@ with tf.Session() as sess:
                                  loss_fn='xent',
                                  **attack_config)
     x_test_adv_bayes = attack.batched_perturb(x_test, y_test, sess)
-    # x_test_adv_bayes = np.load(os.path.join(datadir, 'x_test_adv_detector_xent.npy'))
     bayes_nat_accs = bayes_classifier.nat_accs(x_test, y_test, sess)
     bayes_adv_errors = bayes_classifier.adv_error(x_test_adv_bayes, y_test,
                                                   sess)
