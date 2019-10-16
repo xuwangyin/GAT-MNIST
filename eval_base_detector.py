@@ -17,7 +17,7 @@ parser.add_argument('--norm', choices=['L2', 'Linf'], default='Linf')
 parser.add_argument('--optimizer', choices=['adam', 'normgrad'], default='adam')
 parser.add_argument('--steps', type=int, default=200)
 parser.add_argument('--step_size', type=float, default=0.01)
-parser.add_argument('-p', '--checkpoint', type=str, required=True)
+parser.add_argument('checkpoint')
 
 args = parser.parse_args()
 print(args)
