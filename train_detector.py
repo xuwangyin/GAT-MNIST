@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import train_test_split
 from models import Detector, PGDAttackDetector
-from eval_utils import load_mnist_data
+from eval_utils import load_mnist_data, load_fashion_data
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -32,6 +32,7 @@ parser.add_argument('--test_optimizer',
                     default='adam')
 parser.add_argument('--train_steps', type=int, default=100)
 parser.add_argument('--step_size', type=float, default=0.01)
+parser.add_argument('--dataset', choices=['mnist', 'fashion'], default='mnist')
 
 args = parser.parse_args()
 print(args)
@@ -47,7 +48,10 @@ if args.norm == 'Linf':
     assert args.epsilon in [0.3, 0.5]
     # assert args.step_size == 0.01
 
-(x_train, y_train), (x_test, y_test) = load_mnist_data()
+if args.dataset == 'mnist':
+    (x_train, y_train), (x_test, y_test) = load_mnist_data()
+else:
+    (x_train, y_train), (x_test, y_test) = load_fashion_data()
 
 # use 20% training data to do validation
 x_train, x_val, y_train, y_val = train_test_split(x_train,
@@ -191,8 +195,8 @@ with tf.Session() as sess:
             np.sum(np.bitwise_and(y_pred_test, y_test_with_adv)),
             np.sum(y_test_with_adv), np.sum(1 - y_test_with_adv)))
 
-        savedir = 'checkpoints/mnist/detector_{}_{}/ovr-steps{}-{}-noclip-balanced/'.format(
-            args.norm, args.epsilon, args.train_steps, args.train_optimizer)
+        savedir = 'checkpoints/{}/detector_{}_{}/ovr-steps{}-{}-noclip-balanced/'.format(
+          args.dataset, args.norm, args.epsilon, args.train_steps, args.train_optimizer)
         pathlib.Path(savedir).mkdir(parents=True, exist_ok=True)
         detector_saver.save(sess,
                             os.path.join(savedir, model_name),

@@ -14,6 +14,16 @@ def load_mnist_data():
     return (x_train, y_train), (x_test, y_test)
 
 
+def load_fashion_data():
+    dataset = tf.keras.datasets.fashion_mnist
+
+    (x_train, y_train), (x_test, y_test) = dataset.load_data()
+    x_train, x_test = x_train / 255.0, x_test / 255.0
+    x_train = np.reshape(x_train, [x_train.shape[0], -1])
+    x_test = np.reshape(x_test, [x_test.shape[0], -1])
+    return (x_train, y_train), (x_test, y_test)
+
+
 def get_det_logits(x, x_preds, base_detectors, sess):
     """Compute detector logits for the input.
 
