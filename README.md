@@ -1,4 +1,4 @@
-# Asymmetrical Adversarial Training on MNIST
+# Generative Adversarial Training on MNIST
 
 ## Training
 Use train_classifier.py to train a standard classifier.
