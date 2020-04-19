@@ -29,9 +29,8 @@ checkpoints/mnist/detector_Linf_0.3/ovr-steps100-adam-noclip-balanced/ovr_class0
 
 Pretrained models include Linf-eps0.3, Linf-eps0.5, L2-eps2.5 and L2-eps5.0 constrained detectors, a standard classifier, and a robust classifier.
 
-Download and extract pretrained models:
+Download `checkpoints.tar.gz` from https://1drv.ms/u/s!AhHGPTTIkL_c9BkzDMOOCGNp2SBc?e=jivCK9, and then extract pretrained models:
 ```
- $ wget https://asymmetrical-adversarial-training.s3.amazonaws.com/mnist/checkpoints.tar.gz
  $ tar zxf checkpoints.tar.gz
 ```
 
