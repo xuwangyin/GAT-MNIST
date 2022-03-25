@@ -420,8 +420,9 @@ class PGDAttackClassifier(PGDAttack):
             wrong_logit = tf.reduce_max(
                 (1 - label_mask) * logits - 1e4 * label_mask, axis=1)
             if isinstance(classifier, BayesClassifier):
-                assert not targeted
                 self.loss = tf.reduce_sum(-wrong_logit)
+                if targeted:
+                    self.loss = tf.reduce_sum(-correct_logit)
             else:
                 self.loss = tf.reduce_sum(correct_logit - wrong_logit)
                 if targeted:
